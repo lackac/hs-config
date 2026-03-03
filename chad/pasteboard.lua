@@ -51,8 +51,22 @@ local function trimHistory()
   end
 end
 
+local function isDuplicateOfLastItem(text)
+  local lastItem = history[#history]
+  if not lastItem then
+    return false
+  end
+
+  return (lastItem.fullText or lastItem.text) == text
+end
+
 local function savePasteboardContents(text)
   if text and not shouldFilter() then
+    if isDuplicateOfLastItem(text) then
+      log.v("skipping duplicate content")
+      return
+    end
+
     local sourceApp = hs.pasteboard.readDataForUTI("org.nspasteboard.source")
       or hs.application.frontmostApplication():bundleID()
     local uti = hs.pasteboard.contentTypes()[1]
@@ -127,6 +141,7 @@ module.complete = function(choice)
     hs.pasteboard.writeAllData({
       ["public.utf8-plain-text"] = choice.fullText or choice.text,
       ["org.nspasteboard.source"] = choice.sourceApp,
+      ["org.nspasteboard.TransientType"] = tostring(true),
     })
     hs.timer.waitWhile(module.main.chooserWindow, function()
       hs.eventtap.keyStroke({ "cmd" }, "v")
