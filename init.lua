@@ -7,7 +7,7 @@ local modules = {
   bindings,
   require("urls"),
   require("mod.app_logger"),
-  require("mod.theme"),
+  -- require("mod.theme"),
   require("mod.autoborder"),
   require("mod.watchables"),
 }

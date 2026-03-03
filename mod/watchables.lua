@@ -110,7 +110,7 @@ module.start = function()
     sleep = hs.caffeinate.watcher.new(updateSleep),
     wifi = hs.wifi.watcher.new(updateWiFi),
     battery = hs.battery.watcher.new(updateBattery),
-    theme = hs.distributednotifications.new(updateTheme, "AppleInterfaceThemeChangedNotification"),
+    -- theme = hs.distributednotifications.new(updateTheme, "AppleInterfaceThemeChangedNotification"),
     usb = hs.usb.watcher.new(updateUSB),
   }
 
@@ -123,7 +123,7 @@ module.start = function()
   updateSleep() -- this is required for autohome and automount
   updateWiFi() -- this is required for authome, automount, and wifi notification
   updateBattery()
-  updateTheme()
+  -- updateTheme()
   updateUSB()
 end
 
