@@ -1,4 +1,5 @@
 local capture = require("ext.utils").capture
+local resolveExecutable = require("ext.utils").resolveExecutable
 local images = require("ext.images")
 
 local cache = {}
@@ -11,8 +12,15 @@ local module = {
 
 local log
 
-local unitsPath = "/opt/homebrew/bin/gunits"
 local unitsImage = images.nerdFontsIcon("󰯍", "chocolate")
+
+local function unitsPath()
+  local path = resolveExecutable({ "gunits", "units" })
+  if not path then
+    log.e("can't find GNU units executable in configured search paths")
+  end
+  return path
+end
 
 local categories = {
   {
@@ -62,15 +70,20 @@ local function findCategory(unit)
 end
 
 local function evaluateExpression(expr)
+  local path = unitsPath()
+  if not path then
+    return nil
+  end
+
   log.vf("evaluating '%s' with gunits", expr)
 
   local from, to = expr:match("^(.*)%s+(.*)$")
   local command
 
   if from then
-    command = string.format("%s --terse '%s' '%s'", unitsPath, from:gsub("'", "'\\''"), to:gsub("'", "'\\''"))
+    command = string.format("%s --terse '%s' '%s'", path, from:gsub("'", "'\\''"), to:gsub("'", "'\\''"))
   else
-    command = string.format("%s --terse '%s'", unitsPath, expr:gsub("'", "'\\''"))
+    command = string.format("%s --terse '%s'", path, expr:gsub("'", "'\\''"))
   end
 
   return capture(command):gsub("%s+$", "")

@@ -407,6 +407,11 @@ module.compileChoices = function()
     end
   end
 
+  if latestQuery == "" and mapOfChoices.tips then
+    hs.timer.doAfter(0.25, updatePreview)
+    return mapOfChoices.tips
+  end
+
   local lookup = {}
   local choices = {}
 

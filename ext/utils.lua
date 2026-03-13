@@ -1,4 +1,5 @@
 local module = {}
+local executableCache = {}
 
 -- capitalize string
 module.capitalize = function(str)
@@ -15,6 +16,50 @@ module.capture = function(cmd)
   end
 
   return result
+end
+
+module.resolveExecutable = function(candidates)
+  if type(candidates) == "string" then
+    candidates = { candidates }
+  end
+
+  local cacheKey = table.concat(candidates or {}, "\0")
+  if executableCache[cacheKey] ~= nil then
+    return executableCache[cacheKey] or nil
+  end
+
+  local user = os.getenv("USER") or ""
+  local searchPaths = {
+    "/etc/profiles/per-user/" .. user .. "/bin",
+    "/run/current-system/sw/bin",
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+  }
+
+  for _, candidate in ipairs(candidates or {}) do
+    if type(candidate) == "string" and candidate ~= "" then
+      if candidate:match("/") then
+        if hs.fs.attributes(candidate, "mode") == "file" then
+          executableCache[cacheKey] = candidate
+          return candidate
+        end
+      else
+        for _, dir in ipairs(searchPaths) do
+          local path = dir .. "/" .. candidate
+          if hs.fs.attributes(path, "mode") == "file" then
+            executableCache[cacheKey] = path
+            return path
+          end
+        end
+      end
+    end
+  end
+
+  executableCache[cacheKey] = false
+end
+
+module.clearExecutableCache = function()
+  executableCache = {}
 end
 
 module.keys = function(obj)

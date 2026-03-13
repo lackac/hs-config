@@ -1,17 +1,29 @@
 local module = {}
 
 local log = hs.logger.new("fzf", "debug")
+local resolveExecutable = require("ext.utils").resolveExecutable
 
-local FZF_PATH = "/opt/homebrew/bin/fzf"
+local function fzfPath()
+  local path = resolveExecutable("fzf")
+  if not path then
+    log.e("can't find fzf executable in configured search paths")
+  end
+  return path
+end
 
 local function buildCommand(filter, inputPath, opts)
+  local path = fzfPath()
   local command =
-    string.format("%s %s --filter '%s' < '%s'", FZF_PATH, opts or "", filter:gsub("'", "'\\''"), inputPath)
+    string.format("%s %s --filter '%s' < '%s'", path, opts or "", filter:gsub("'", "'\\''"), inputPath)
   return command
 end
 
 -- filter an input with fzf
 module.filter = function(filterQuery, input, lineProcessor, opts)
+  if not fzfPath() then
+    return
+  end
+
   local inputPath = hs.fs.temporaryDirectory() .. "fzf-input-" .. hs.host.uuid()
   local inputFile = io.open(inputPath, "w")
   if not inputFile then
