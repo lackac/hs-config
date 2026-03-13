@@ -8,14 +8,27 @@ local cache = { status = status }
 local module = { cache = cache }
 
 local updateBattery = function()
-  local burnRate = hs.battery.designCapacity() / math.abs(hs.battery.amperage())
+  local percentage = hs.battery.percentage()
+
+  if percentage == nil then
+    status.battery = nil
+    return
+  end
+
+  local amperage = hs.battery.amperage()
+  local designCapacity = hs.battery.designCapacity()
+  local burnRate = nil
+
+  if amperage and amperage ~= 0 and designCapacity then
+    burnRate = designCapacity / math.abs(amperage)
+  end
 
   status.battery = {
     isCharging = hs.battery.isCharging(),
     isCharged = hs.battery.isCharged(),
-    percentage = hs.battery.percentage(),
+    percentage = percentage,
     powerSource = hs.battery.powerSource(),
-    amperage = hs.battery.amperage(),
+    amperage = amperage,
     wattage = hs.battery.watts(),
     timeRemaining = hs.battery.timeRemaining(),
     timeToFullCharge = hs.battery.timeToFullCharge(),
