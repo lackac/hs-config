@@ -1,0 +1,9 @@
+syntax = "Lua51"
+indent_type = "Spaces"
+indent_width = 2
+column_width = 120
+quote_style = "AutoPreferDouble"
+call_parentheses = "Input"
+
+[sort_requires]
+enabled = false
