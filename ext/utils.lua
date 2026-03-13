@@ -76,4 +76,42 @@ module.unescape = function(str)
   return ret
 end
 
+module.ensureDirectory = function(path)
+  local mode = hs.fs.attributes(path, "mode")
+
+  if mode == "directory" then
+    return true
+  end
+
+  if mode ~= nil then
+    return false, path .. " exists and is not a directory"
+  end
+
+  local parent = path:match("^(.*)/[^/]+$")
+
+  if parent and parent ~= "" and parent ~= path then
+    local ok, err = module.ensureDirectory(parent)
+
+    if not ok then
+      return false, err
+    end
+  end
+
+  if hs.fs.mkdir(path) then
+    return true
+  end
+
+  return false, "failed to create directory: " .. path
+end
+
+module.ensureParentDirectory = function(path)
+  local dir = path:match("^(.*)/[^/]+$")
+
+  if not dir or dir == "" then
+    return true
+  end
+
+  return module.ensureDirectory(dir)
+end
+
 return module

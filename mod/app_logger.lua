@@ -1,4 +1,5 @@
 local windowMetadata = require("ext.window").windowMetadata
+local ensureParentDirectory = require("ext.utils").ensureParentDirectory
 local config = require("config")
 
 local cache = {}
@@ -47,6 +48,12 @@ module.start = function()
   local loggerConfig = config.appLogger or {}
   local path = loggerConfig.path
     or (os.getenv("XDG_STATE_HOME") or (os.getenv("HOME") .. "/.local/state")) .. "/hs/app_logger.db"
+
+  local ok, err = ensureParentDirectory(path)
+
+  if not ok then
+    error("failed to prepare app logger path '" .. path .. "': " .. err)
+  end
 
   cache.db = hs.sqlite3.open(path)
 
