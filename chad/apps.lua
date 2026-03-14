@@ -143,7 +143,11 @@ end
 
 module.complete = function(choice)
   log.v("complete choice: " .. hs.inspect(choice))
-  hs.open(choice.subText)
+  if choice then
+    hs.timer.waitWhile(module.main.chooserWindow, function()
+      hs.open(choice.subText)
+    end, 0.2)
+  end
 end
 
 module.start = function(main, _)
