@@ -8,6 +8,41 @@ local cache = {
 
 local module = { cache = cache }
 
+local applescriptResult = function(script)
+  local ok, result = hs.osascript.applescript(script)
+
+  if ok and result ~= nil then
+    return result
+  end
+
+  return nil
+end
+
+local browserWindowMode = function(appName)
+  local result = applescriptResult(string.format(
+    [[
+      tell application "%s" to get mode of front window
+    ]],
+    appName
+  ))
+
+  if type(result) == "string" then
+    return string.lower(result)
+  end
+
+  return nil
+end
+
+local browserFrontWindowURL = function(appName, tabReference)
+  return applescriptResult(string.format(
+    [[
+      tell application "%s" to get URL of %s of front window
+    ]],
+    appName,
+    tabReference
+  ))
+end
+
 module.forceFocus = function(win)
   -- this flickers
   -- win:application():activate()
@@ -191,58 +226,28 @@ module.windowMetadata = function(win)
     if string.match(title, "Find in page") then
       title = ""
       meta = ""
-    elseif string.match(title, "(Private)") then
+    elseif string.match(title, "(Private)") or browserWindowMode(name) == "incognito" then
       -- don't log private windows
       title = "(Private)"
     else
-      -- log URLs
-      local _, result = hs.osascript.applescript(string.format(
-        [[
-        tell application "Brave Browser" to get URL of active tab of window named "%s"
-      ]],
-        string.gsub(title, " %- Brave %- .*", "")
-      ))
-
-      if result ~= nil then
-        meta = result
-      end
+      meta = browserFrontWindowURL(name, "active tab") or ""
     end
   elseif name == "Google Chrome" then
     if string.match(title, "Find in page") then
       title = ""
       meta = ""
-    elseif string.match(title, "(Incognito)") then
+    elseif string.match(title, "(Incognito)") or browserWindowMode(name) == "incognito" then
       -- don't log incognito windows
       title = "(Incognito)"
     else
-      -- log URLs
-      local _, result = hs.osascript.applescript(string.format(
-        [[
-        tell application "Google Chrome" to get URL of active tab of window named "%s"
-      ]],
-        string.gsub(title, " %- Google Chrome", "")
-      ))
-
-      if result ~= nil then
-        meta = result
-      end
+      meta = browserFrontWindowURL(name, "active tab") or ""
     end
   elseif name == "Safari" then
     if string.match(title, "Private Browsing") then
       -- don't log incognito windows
       title = "Private Browsing"
     else
-      -- log URLs
-      local _, result = hs.osascript.applescript(string.format(
-        [[
-        tell application "Safari" to get URL of current tab of window named "%s"
-      ]],
-        title
-      ))
-
-      if result ~= nil then
-        meta = result
-      end
+      meta = browserFrontWindowURL(name, "current tab") or ""
     end
   elseif name == "Finder" then
     -- log paths
