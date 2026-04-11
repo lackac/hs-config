@@ -43,7 +43,8 @@ return {
           layout = "tabbed-right",
           layoutOptions = { mainPaneRatio = 0.618 },
           windows = {
-            { app = "kitty", focus = true },
+            { app = "Ghostty", focus = true },
+            { app = "kitty" },
             { app = "Zed" },
           },
         },
@@ -87,6 +88,7 @@ return {
           layout = "tabbed-right",
           layoutOptions = { mainPaneRatio = 0.5 },
           windows = {
+            "Ghostty",
             "kitty",
             { app = "Zed" },
             { app = "Brave Browser", title = "🐦$", focus = true },
@@ -111,6 +113,7 @@ return {
           layout = "tabbed-top",
           layoutOptions = { mainPaneRatio = 0.5 },
           windows = {
+            "Ghostty",
             "kitty",
           },
         },

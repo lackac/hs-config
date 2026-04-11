@@ -8,6 +8,7 @@ return {
     "profile:100S",
     {
       "kitty:100Starlings",
+      "Ghostty:100Starlings",
     },
   },
 }
