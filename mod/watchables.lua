@@ -84,24 +84,6 @@ local usbDebounce = hs.timer.delayed.new(3, function()
     return device.vendorName == "splitkb.com"
   end) ~= nil
 
-  -- disable key remapping for voyager
-  if status.voyagerAttached then
-    os.execute([[
-      hidutil property \
-        --matching '{"ProductID": 0x1977, "VendorID": 0x3297}' \
-        --set '{"UserKeyMapping": []}'
-    ]])
-  end
-
-  -- disable key remapping for splitkb keyboards
-  if status.splitkbAttached then
-    os.execute([[
-      hidutil property \
-        --matching '{"ProductID": 0x3a07, "VendorID": 0x8d1d}' \
-        --set '{"UserKeyMapping": []}'
-    ]])
-  end
-
   log.d("updated voyager:", status.voyagerAttached)
   log.d("updated splitkb:", status.splitkbAttached)
 end)

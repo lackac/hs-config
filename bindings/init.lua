@@ -2,7 +2,7 @@ local cache = {}
 local module = { cache = cache, enabled = {} }
 
 -- modifiers in use:
--- caps lock is mapped to ctrl and left ctrl to F19 with hidutil (see ~/bin/remap_keys)
+-- caps lock is mapped to ctrl and left ctrl to F19 with hidutil (see mod.keyboard)
 -- * cltr+alt: move focus between windows
 -- * ctrl+shift: do things to windows
 -- * hyper (global modal): global shortcuts and app switching
