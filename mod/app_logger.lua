@@ -23,6 +23,27 @@ local sanitize = function(s)
   return s:gsub([[']], "''")
 end
 
+local executeOrError = function(db, statement, description)
+  local result = db:execute(statement)
+
+  if result ~= hs.sqlite3.OK then
+    error("failed to " .. description .. ": " .. db:errmsg())
+  end
+end
+
+local prepareSchema = function(db)
+  executeOrError(db, "DROP TRIGGER IF EXISTS ft_log_update", "remove legacy app logger FTS trigger")
+  executeOrError(db, "DROP TABLE IF EXISTS ft_log", "remove legacy app logger FTS table")
+  executeOrError(
+    db,
+    [[
+      CREATE TABLE IF NOT EXISTS log (app TEXT NOT NULL, title TEXT NOT NULL, epoch INTEGER NOT NULL, meta TEXT);
+      CREATE INDEX IF NOT EXISTS basic_search_idx ON log (app, title, meta);
+    ]],
+    "prepare app logger schema"
+  )
+end
+
 local prepareLogValues = function(win)
   local app = win:application()
 
@@ -57,16 +78,11 @@ module.start = function()
 
   cache.db = hs.sqlite3.open(path)
 
-  cache.db:execute([[
-    CREATE TABLE IF NOT EXISTS log (app TEXT NOT NULL, title TEXT NOT NULL, epoch INTEGER NOT NULL, meta TEXT);
-    CREATE INDEX IF NOT EXISTS basic_search_idx ON log (app, title, meta);
-    CREATE VIRTUAL TABLE IF NOT EXISTS ft_log USING FTS5(title, meta);
+  if not cache.db then
+    error("failed to open app logger db at '" .. path .. "'")
+  end
 
-    CREATE TRIGGER IF NOT EXISTS ft_log_update AFTER INSERT ON log BEGIN
-      INSERT INTO ft_log(title, meta)
-      VALUES (new.title, new.meta);
-    END
-  ]])
+  prepareSchema(cache.db)
 
   cache.watcherSleep = hs.watchable.watch("status.sleepEvent", module.sleepWatcher)
 
@@ -112,6 +128,11 @@ end
 module.stop = function()
   cache.timer:stop()
   cache.timer = nil
+
+  if cache.db then
+    cache.db:close()
+    cache.db = nil
+  end
 end
 
 return module
