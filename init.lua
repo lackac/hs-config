@@ -4,6 +4,7 @@ require("overrides")
 
 local bindings = require("bindings")
 local modules = {
+  require("mod.keyboard"),
   bindings,
   require("urls"),
   require("mod.app_logger"),
