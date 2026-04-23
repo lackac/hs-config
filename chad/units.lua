@@ -13,6 +13,7 @@ local module = {
 local log
 
 local unitsImage = images.nerdFontsIcon("󰯍", "chocolate")
+local unitsOverlayFile = '"$HOME/.config/units/overlay.units"'
 
 local function unitsPath()
   local path = resolveExecutable({ "gunits", "units" })
@@ -81,9 +82,15 @@ local function evaluateExpression(expr)
   local command
 
   if from then
-    command = string.format("%s --terse '%s' '%s'", path, from:gsub("'", "'\\''"), to:gsub("'", "'\\''"))
+    command = string.format(
+      "MYUNITSFILE=%s %s --terse '%s' '%s'",
+      unitsOverlayFile,
+      path,
+      from:gsub("'", "'\\''"),
+      to:gsub("'", "'\\''")
+    )
   else
-    command = string.format("%s --terse '%s'", path, expr:gsub("'", "'\\''"))
+    command = string.format("MYUNITSFILE=%s %s --terse '%s'", unitsOverlayFile, path, expr:gsub("'", "'\\''"))
   end
 
   return capture(command):gsub("%s+$", "")
