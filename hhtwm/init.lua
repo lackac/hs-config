@@ -70,6 +70,38 @@ local getScreenBySpaceId = function(spaceId)
   return hs.screen.findByID(hs.spaces.spaceDisplay(spaceId))
 end
 
+local getWindowSpaceId = function(win)
+  local spaces = hs.spaces.windowSpaces(win)
+
+  if spaces and #spaces > 0 then
+    return spaces[1]
+  end
+end
+
+local moveWindowToManagedTarget = function(win, targetScreen, targetSpaceId)
+  local currentSpaceId = getWindowSpaceId(win)
+  if currentSpaceId ~= targetSpaceId then
+    log.df("applyManagedLayout ---- moving window from %s to %d", currentSpaceId or "unknown", targetSpaceId)
+    hs.spaces.moveWindowToSpace(win, targetSpaceId)
+  end
+
+  currentSpaceId = getWindowSpaceId(win)
+  if currentSpaceId == targetSpaceId and win:screen():id() == targetScreen:id() then
+    return true
+  end
+
+  if win:screen():id() ~= targetScreen:id() then
+    log.df("applyManagedLayout ---- falling back to screen move for %s", hs.inspect(win))
+    win:moveToScreen(targetScreen, true, true)
+
+    if getWindowSpaceId(win) ~= targetSpaceId then
+      hs.spaces.moveWindowToSpace(win, targetSpaceId)
+    end
+  end
+
+  return getWindowSpaceId(win) == targetSpaceId and win:screen():id() == targetScreen:id()
+end
+
 module.setDisplayLayouts = function(newLayouts)
   if type(newLayouts) == "table" then
     cache.displayLayouts = newLayouts
@@ -563,9 +595,25 @@ module.applyManagedLayout = function(layout)
           table.remove(cache.spaces[trackedSpaceId], trackedIdx)
         end
 
-        if spaceId ~= winSpaces[1] then
-          log.df("applyManagedLayout ---- moving window from %d to %d", winSpaces[1], spaceId)
-          hs.spaces.moveWindowToSpace(window, spaceId)
+        local moved = moveWindowToManagedTarget(window, screen, spaceId)
+
+        if not moved then
+          local observedSpaceId = getWindowSpaceId(window)
+
+          if observedSpaceId then
+            ensureSpaceCache(observedSpaceId)
+            table.insert(cache.spaces[observedSpaceId], window)
+          end
+
+          log.wf(
+            "applyManagedLayout ---- could not move %s to screen %s space %d; keeping it tiled on screen %s space %s",
+            hs.inspect(windowFilter),
+            screenName,
+            spaceId,
+            window:screen():name(),
+            observedSpaceId or "unknown"
+          )
+          goto nextWindow
         end
 
         table.insert(newTilingCache, window)
