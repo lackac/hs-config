@@ -51,20 +51,26 @@ local function trimHistory()
   end
 end
 
-local function isDuplicateOfLastItem(text)
-  local lastItem = history[#history]
-  if not lastItem then
-    return false
+local function duplicateIndex(text)
+  for i = #history, 1, -1 do
+    local item = history[i]
+    if (item.fullText or item.text) == text then
+      return i
+    end
   end
 
-  return (lastItem.fullText or lastItem.text) == text
+  return nil
 end
 
 local function savePasteboardContents(text)
   if text and not shouldFilter() then
-    if isDuplicateOfLastItem(text) then
+    local existingIndex = duplicateIndex(text)
+    if existingIndex == #history then
       log.v("skipping duplicate content")
       return
+    elseif existingIndex then
+      log.vf("moving duplicate content from history index %d", existingIndex)
+      table.remove(history, existingIndex)
     end
 
     local sourceApp = hs.pasteboard.readDataForUTI("org.nspasteboard.source")
@@ -138,11 +144,17 @@ end
 module.complete = function(choice)
   log.v("complete choice: " .. hs.inspect(choice))
   if choice then
-    hs.pasteboard.writeAllData({
-      ["public.utf8-plain-text"] = choice.fullText or choice.text,
+    local text = choice.fullText or choice.text
+    local pasteboardData = {
+      ["public.utf8-plain-text"] = text,
       ["org.nspasteboard.source"] = choice.sourceApp,
-      ["org.nspasteboard.TransientType"] = tostring(true),
-    })
+    }
+
+    if choice == history[#history] then
+      pasteboardData["org.nspasteboard.TransientType"] = tostring(true)
+    end
+
+    hs.pasteboard.writeAllData(pasteboardData)
     hs.timer.waitWhile(module.main.chooserWindow, function()
       hs.eventtap.keyStroke({ "cmd" }, "v")
     end, 0.2)
