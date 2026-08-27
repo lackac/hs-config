@@ -21,6 +21,7 @@ bindings.enabled = {
   "ctrl-esc",
   "focus",
   "global",
+  "web_archive",
   "emoji",
   --"notes",
   "viscosity",
