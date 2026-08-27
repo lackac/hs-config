@@ -111,6 +111,7 @@ module.start = function()
     { key = "space", apps = config.apps.browsers },
     { key = "g", apps = config.apps.browsers },
     { key = "o", apps = { "Obsidian" } },
+    { key = "a", apps = { "ChatGPT", "Perplexity" } },
     { key = "c", apps = { "Calendar", "Reminders" } },
     { key = "f", apps = { "Finder" } },
     { key = "m", apps = { "Messages" } },
