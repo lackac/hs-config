@@ -2,7 +2,7 @@ local config = require("config").web_archive
 local resolveExecutable = require("ext.utils").resolveExecutable
 local windowMetadata = require("ext.window").windowMetadata
 
-local cache = { busy = {}, timer = nil, watcher = nil }
+local cache = { tasks = {}, timer = nil, watcher = nil }
 local module = { cache = cache }
 local log = hs.logger.new("web-archive", "debug")
 
@@ -16,7 +16,7 @@ local function isBrowser(win)
 end
 
 local function runFinalizer(path)
-  if cache.busy[path] then
+  if cache.tasks[path] then
     return
   end
 
@@ -26,22 +26,27 @@ local function runFinalizer(path)
     return
   end
 
-  cache.busy[path] = true
-  hs.task.new(obsidian, function(code, stdout, stderr)
-    cache.busy[path] = nil
-    if code == 0 then
+  local evaluation = string.format(
+    [[app.plugins.plugins["life-tools"].finalizeWebCapture(%s)]],
+    hs.json.encode({ path = path, navigate = false })
+  )
+  local task = hs.task.new(obsidian, function(code, stdout, stderr)
+    cache.tasks[path] = nil
+    local cliError = stdout:match("^Error:%s*(.+)")
+    if code == 0 and not cliError then
       log.df("Finalized %s: %s", path, stdout)
       return
     end
-    local message = (stderr ~= "" and stderr or stdout):gsub("%s+$", "")
+    local message = cliError or (stderr ~= "" and stderr or stdout):gsub("%s+$", "")
     log.ef("Could not finalize %s: %s", path, message)
     notify("Capture needs review: " .. path:match("([^/]+)$"))
   end, {
     "vault=" .. config.vault,
-    "quickadd:run",
-    "choice=" .. config.finalizeChoice,
-    "value-webStagingPath=" .. path,
-  }):start()
+    "eval",
+    "code=" .. evaluation,
+  })
+  cache.tasks[path] = task
+  task:start()
 end
 
 local function processStaging()
@@ -128,6 +133,9 @@ end
 module.stop = function()
   if cache.timer then cache.timer:stop() end
   if cache.watcher then cache.watcher:stop() end
+  for _, task in pairs(cache.tasks) do
+    task:terminate()
+  end
 end
 
 return module
