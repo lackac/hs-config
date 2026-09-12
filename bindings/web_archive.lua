@@ -99,19 +99,24 @@ local function logCurrentPage()
   end
 
   hs.application.launchOrFocus("Obsidian")
-  hs.task.new(obsidian, function(code, stdout, stderr)
-    if code ~= 0 then
-      log.ef("Could not log %s: %s", url, stderr ~= "" and stderr or stdout)
+  local evaluation =
+    string.format([[app.plugins.plugins["life-tools"].logWebPage(%s)]], hs.json.encode({ title = title, url = url }))
+  hs.task
+    .new(obsidian, function(code, stdout, stderr)
+      local cliError = stdout:match("^Error:%s*(.+)")
+      if code == 0 and not cliError then
+        log.df("Logged %s: %s", url, stdout)
+        return
+      end
+      local message = cliError or (stderr ~= "" and stderr or stdout):gsub("%s+$", "")
+      log.ef("Could not log %s: %s", url, message)
       notify("Could not log the current page")
-    end
-  end, {
-    "vault=" .. config.vault,
-    "quickadd:run",
-    "choice=" .. config.logChoice,
-    "value-webTitle=" .. title,
-    "value-webUrl=" .. url,
-    "ui",
-  }):start()
+    end, {
+      "vault=" .. config.vault,
+      "eval",
+      "code=" .. evaluation,
+    })
+    :start()
 end
 
 module.start = function()
@@ -131,8 +136,12 @@ module.start = function()
 end
 
 module.stop = function()
-  if cache.timer then cache.timer:stop() end
-  if cache.watcher then cache.watcher:stop() end
+  if cache.timer then
+    cache.timer:stop()
+  end
+  if cache.watcher then
+    cache.watcher:stop()
+  end
   for _, task in pairs(cache.tasks) do
     task:terminate()
   end
