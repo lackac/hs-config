@@ -22,6 +22,7 @@ bindings.enabled = {
   "focus",
   "global",
   "web_archive",
+  "windowborder",
   "emoji",
   --"notes",
   "viscosity",

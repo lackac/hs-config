@@ -3,9 +3,14 @@ return {
   highlightMouse = true,
   historyLimit = 100,
   borderStyle = {
-    width = 4,
-    alpha = 0.6,
-    distance = 4,
-    roundRadius = 26,
+    style = "knit",
+    width = 8,
+    color = "#D58561",
+    pattern = "zigzag",
+    stitch = "stockinette",
+    rows = 6,
+    radius = "auto",
+    fallbackRadius = 9,
+    tuck = 14,
   },
 }

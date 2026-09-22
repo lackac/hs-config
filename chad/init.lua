@@ -1,9 +1,9 @@
 -- Alfred replacement implemented fully in Hammerspoon
 
-local drawBorder = require("ext.drawing").drawBorder
+local autoborder = require("mod.autoborder")
 local fzfFilter = require("ext.fzf").filter
 
-local module = {};
+local module = {}
 
 (function()
   local source = debug.getinfo(1, "S").source:sub(2)
@@ -464,6 +464,7 @@ end
 
 module.willOpen = function()
   log.v("willOpen")
+  autoborder.suspend("chooser")
   local focusedElement = hs.uielement.focusedElement()
   local selectedText = focusedElement and focusedElement:selectedText()
   if selectedText and selectedText ~= "" then
@@ -475,7 +476,6 @@ end
 
 module.shown = function()
   log.v("shown")
-  drawBorder()
   showPluginLabel()
   modal:enter()
 end
@@ -485,7 +485,7 @@ module.hidden = function()
   module.saveQuery()
   hidePluginLabel()
   hidePreview()
-  drawBorder()
+  autoborder.resume("chooser")
   modal:exit()
 end
 

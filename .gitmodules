@@ -1,0 +1,3 @@
+[submodule "hs/windowborder/vendor/window-sweaters"]
+	path = hs/windowborder/vendor/window-sweaters
+	url = https://github.com/saragordic/window-sweaters.git
