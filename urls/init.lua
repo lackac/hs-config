@@ -256,6 +256,24 @@ end
 module.start = function()
   hs.urlevent.setDefaultHandler("http")
 
+  hs.urlevent.bind("opencode-session", function(_, params)
+    if type(params.id) ~= "string" or not params.id:match("^ses_[%w]+$") then
+      hs.alert.show("Invalid OpenCode session link")
+      return
+    end
+
+    local ruby = require("ext.utils").resolveExecutable("ruby")
+    local script = os.getenv("HOME") .. "/Code/lackac/hs-config/scripts/open-opencode-session.rb"
+    hs.task.new(ruby, function(code, _, error)
+      if code == 0 then
+        hs.application.launchOrFocus("Ghostty")
+      else
+        log.ef("OpenCode session link failed: %s", error)
+        hs.alert.show("Could not open OpenCode session")
+      end
+    end, { "--disable-gems", script, params.id }):start()
+  end)
+
   cache.handlers._default = findOrBuildHandler(config.urls.defaultHandler)
 
   ---@diagnostic disable-next-line: duplicate-set-field
@@ -289,6 +307,7 @@ end
 
 module.stop = function()
   hs.urlevent.httpCallback = nil
+  hs.urlevent.bind("opencode-session", nil)
   if cache.appWatcher then
     cache.appWatcher:stop()
   end
