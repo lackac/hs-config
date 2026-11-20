@@ -1,4 +1,4 @@
 return {
-  terms = { "Ghostty", "kitty", "Terminal" },
+  terms = { "Rex", "Ghostty", "kitty", "Terminal" },
   browsers = { "Brave Browser", "Safari", "Google Chrome" },
 }
