@@ -254,6 +254,11 @@ local function getAppAndTitle(senderPID)
 end
 
 module.start = function()
+  local frontmostApp = hs.application.frontmostApplication()
+  if frontmostApp and frontmostApp:name() ~= "Hammerspoon" then
+    cache.mostRecentApp = frontmostApp
+  end
+
   hs.urlevent.setDefaultHandler("http")
 
   hs.urlevent.bind("opencode-session", function(_, params)
