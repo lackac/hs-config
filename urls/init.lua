@@ -262,21 +262,32 @@ module.start = function()
   hs.urlevent.setDefaultHandler("http")
 
   hs.urlevent.bind("opencode-session", function(_, params)
-    if type(params.id) ~= "string" or not params.id:match("^ses_[%w]+$") then
+    if type(params.id) ~= "string" or #params.id > 132 or not params.id:match("^ses_[A-Za-z0-9]+$") then
       hs.alert.show("Invalid OpenCode session link")
       return
     end
 
     local ruby = require("ext.utils").resolveExecutable("ruby")
+    if not ruby then
+      hs.alert.show("Could not open OpenCode session: Ruby not found")
+      return
+    end
+
     local script = os.getenv("HOME") .. "/Code/lackac/hs-config/scripts/open-opencode-session.rb"
-    hs.task.new(ruby, function(code, _, error)
+    local task = hs.task.new(ruby, function(code, _, error)
       if code == 0 then
-        hs.application.launchOrFocus("Ghostty")
+        if not hs.application.launchOrFocusByBundleID("com.superlogical.rex") then
+          hs.alert.show("OpenCode session selected but Rex could not be raised")
+        end
       else
         log.ef("OpenCode session link failed: %s", error)
-        hs.alert.show("Could not open OpenCode session")
+        local message = error:match("[^\r\n]+")
+        hs.alert.show(message or "Could not open OpenCode session")
       end
-    end, { "--disable-gems", script, params.id }):start()
+    end, { "--disable-gems", script, params.id })
+    if not task or not task:start() then
+      hs.alert.show("Could not start the OpenCode session link helper")
+    end
   end)
 
   cache.handlers._default = findOrBuildHandler(config.urls.defaultHandler)
