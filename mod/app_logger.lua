@@ -1,6 +1,7 @@
 local windowMetadata = require("ext.window").windowMetadata
 local ensureParentDirectory = require("ext.utils").ensureParentDirectory
 local config = require("config")
+local rexMetadata = require("mod.app_logger_rex")
 
 local cache = {}
 local module = { cache = cache }
@@ -44,25 +45,31 @@ local prepareSchema = function(db)
   )
 end
 
-local prepareLogValues = function(win)
-  local app = win:application()
+local function insertSample(app, title, time, meta)
+  local statement = "INSERT INTO log VALUES('"
+    .. sanitize(app)
+    .. "', '"
+    .. sanitize(title)
+    .. "', '"
+    .. time
+    .. "', '"
+    .. sanitize(meta)
+    .. "')"
+  local insert = cache.db:execute(statement)
 
-  if app == nil then
-    return nil, nil, nil
+  if insert ~= hs.sqlite3.OK then
+    local errmsg = cache.db:errmsg()
+    if errmsg ~= cache.lastError then
+      hs.notify
+        .new({
+          title = "App Logger failed",
+          subTitle = "Look into Hammerspoon Console for more info",
+        })
+        :send()
+      log.e("failed insert: " .. errmsg .. "\n" .. statement)
+      cache.lastError = errmsg
+    end
   end
-
-  local name = sanitize(app:name())
-
-  if name == "loginwindow" then
-    return nil, nil, nil
-  end
-
-  local title, meta = windowMetadata(win)
-
-  title = sanitize(title or "")
-  meta = sanitize(meta or "")
-
-  return name, title, meta
 end
 
 module.start = function()
@@ -97,37 +104,42 @@ module.start = function()
       return
     end
 
-    local app, title, meta = prepareLogValues(win)
-    if not app then
+    local app = win:application()
+    local name = app and app:name()
+    if not name or name == "loginwindow" then
       return
     end
 
     local time = os.time()
-    local statement = "INSERT INTO log VALUES('" .. app .. "', '" .. title .. "', '" .. time .. "', '" .. meta .. "')"
-    local insert = cache.db:execute(statement)
-
-    if insert ~= hs.sqlite3.OK then
-      local errmsg = cache.db:errmsg()
-
-      if errmsg ~= cache.lastError then
-        hs.notify
-          .new({
-            title = "App Logger failed",
-            subTitle = "Look into Hammerspoon Console for more info",
-          })
-          :send()
-
-        log.e("failed insert: " .. errmsg .. "\n" .. statement)
-
-        cache.lastError = errmsg
+    local title, meta = windowMetadata(win)
+    title, meta = title or "", meta or ""
+    if meta == "" and app:bundleID() == rexMetadata.bundleID and not cache.rexTask then
+      local task
+      task = rexMetadata.lookup(win, title, function(directory)
+        if task and cache.rexTask == task then
+          cache.rexTask = nil
+          insertSample(name, title, time, directory or meta)
+        end
+      end)
+      if task then
+        cache.rexTask = task
+        return
       end
     end
+
+    insertSample(name, title, time, meta)
   end)
 end
 
 module.stop = function()
   cache.timer:stop()
   cache.timer = nil
+
+  local task = cache.rexTask
+  cache.rexTask = nil
+  if task and task:isRunning() then
+    task:terminate()
+  end
 
   if cache.db then
     cache.db:close()
