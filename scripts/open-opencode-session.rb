@@ -11,13 +11,14 @@ require "uri"
 class SessionLinkError < StandardError; end
 
 class SessionLinkOpener
+  SESSION_ID = /\Ases_[A-Za-z0-9]{1,128}\z/
   UUID = /[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}/i
   REX_ENV = %w[XDG_RUNTIME_DIR REX_RUNTIME_DIR REX_HOME REX_SERVER REX_CLIENT REX_SESSION REX_BLOCK].to_h { |key| [key, nil] }.freeze
   REMOTE_CONTROL = "Check Rex → Settings → Rex Server → Remote Control."
   RPC = "/api/rpc/opencode.session-link"
 
   def initialize(id, dry_run: false)
-    raise SessionLinkError, "Invalid session ID." unless id&.match?(/\Ases_[A-Za-z0-9]{1,128}\z/)
+    raise SessionLinkError, "Invalid session ID." unless id.is_a?(String) && id.match?(SESSION_ID)
 
     @id = id
     @dry_run = dry_run
@@ -63,9 +64,10 @@ class SessionLinkOpener
     sandboxes = project["sandboxes"]
     raise SessionLinkError, "Invalid OpenCode project sandboxes." unless sandboxes.is_a?(Array)
 
-    unless inside?(directory, root) || inside_sandbox?(directory, sandboxes)
-      raise SessionLinkError, "Session directory is outside its project and sandboxes."
-    end
+    # A checkout outside the canonical root needs its own Rex project.
+    root = sandbox_root(directory, sandboxes) unless inside?(directory, root)
+    raise SessionLinkError, "Session directory is outside its project and sandboxes." unless root
+
     [root, directory]
   end
 
@@ -79,12 +81,13 @@ class SessionLinkOpener
     raise SessionLinkError, "OpenCode #{kind} directory is unavailable."
   end
 
-  def inside_sandbox?(directory, sandboxes)
-    sandboxes.any? do |path|
-      inside?(directory, canonical_directory(path, "sandbox"))
+  def sandbox_root(directory, sandboxes)
+    sandboxes.filter_map do |path|
+      root = canonical_directory(path, "sandbox")
+      root if inside?(directory, root)
     rescue SessionLinkError
-      false # A recorded sandbox can have been removed.
-    end
+      nil # A recorded sandbox can have been removed.
+    end.max_by(&:length)
   end
 
   def safe_path?(path)
@@ -161,21 +164,49 @@ class SessionLinkOpener
   end
 
   def switch_conversation(directory, block)
-    timeout_message = "OpenCode did not acknowledge the conversation link; delivery is uncertain."
     deadline = now + 15
-    request_id = field(rpc("request", directory, { sessionID: @id, blockID: block }, timeout: deadline - now), "requestID")
-    unless request_id.is_a?(String) && request_id.match?(/\A#{UUID}\z/)
-      raise SessionLinkError, "OpenCode returned an invalid request ID; delivery is uncertain."
-    end
+    wait_for_rpc(deadline, directory, block)
+    remaining = deadline - now
+    raise SessionLinkError, "OpenCode conversation link timed out before sending the request." unless remaining > 0
 
-    wait_until(deadline, timeout_message) do |remaining|
-      pending = rpc("pending", directory, { blockID: block }, timeout: remaining)
-      acknowledged = field(pending, "acknowledged")
-      unless field(pending, "requestID") == request_id && field(pending, "sessionID") == @id && [true, false].include?(acknowledged)
-        raise SessionLinkError, "OpenCode lost or replaced the conversation request; delivery is uncertain."
+    begin
+      request_id = field(rpc("request", directory, { sessionID: @id, blockID: block }, timeout: remaining), "requestID")
+      raise SessionLinkError, "OpenCode returned an invalid request ID." unless request_id?(request_id)
+
+      wait_until(deadline, "OpenCode did not acknowledge the conversation link.") do |remaining|
+        pending = rpc("pending", directory, { blockID: block }, timeout: remaining)
+        acknowledged = field(pending, "acknowledged")
+        unless field(pending, "requestID") == request_id && field(pending, "sessionID") == @id && [true, false].include?(acknowledged)
+          raise SessionLinkError, "OpenCode lost or replaced the conversation request."
+        end
+        acknowledged
       end
-      acknowledged
+    rescue SessionLinkError => e
+      raise SessionLinkError, "OpenCode conversation delivery is uncertain. #{e.message}"
     end
+  end
+
+  def wait_for_rpc(deadline, directory, block)
+    # OpenCode loads the location's RPC handlers lazily. Probe without navigating.
+    last_error = nil
+    wait_until(deadline, "OpenCode conversation RPC did not become ready.") do |remaining|
+      pending = rpc("pending", directory, { blockID: block }, timeout: [3, remaining].min)
+      unless pending.is_a?(Hash) && %w[requestID sessionID acknowledged].all? { |key| pending.key?(key) }
+        raise SessionLinkError, "Invalid pending response."
+      end
+      request, session, acknowledged = pending.values_at("requestID", "sessionID", "acknowledged")
+      empty = request.nil? && session.nil? && acknowledged == false
+      present = request_id?(request) &&
+        session.is_a?(String) && session.match?(SESSION_ID) && [true, false].include?(acknowledged)
+      raise SessionLinkError, "Invalid pending response." unless empty || present
+
+      true
+    rescue SessionLinkError => e
+      last_error = e.message
+      false
+    end
+  rescue SessionLinkError => e
+    raise SessionLinkError, [e.message, last_error].compact.join(" ")
   end
 
   def rpc(method, directory, input, timeout:)
@@ -183,8 +214,8 @@ class SessionLinkOpener
     response = json("opencode", "api", "post", "#{RPC}/#{method}?#{query}",
       "--data", JSON.generate(input: input), chdir: directory, timeout: timeout)
     field(response, "output")
-  rescue SessionLinkError => e
-    raise SessionLinkError, "OpenCode conversation #{method} failed; delivery is uncertain. #{e.message}"
+  rescue SessionLinkError, SystemCallError => e
+    raise SessionLinkError, "OpenCode conversation #{method} failed. #{e.message}"
   end
 
   def field(object, key)
@@ -193,6 +224,10 @@ class SessionLinkOpener
 
   def rex_id?(id, kind)
     id.is_a?(String) && id.match?(/\A#{kind}:#{UUID}\z/)
+  end
+
+  def request_id?(id)
+    id.is_a?(String) && id.match?(/\A#{UUID}\z/)
   end
 
   def now

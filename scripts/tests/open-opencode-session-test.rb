@@ -98,8 +98,8 @@ class OpenCodeSessionLinkTest < Minitest::Test
     @opener.expect("rex", "client", "ls", "--json", response: { clients: clients })
   end
 
-  def project(started:, block: BLOCK)
-    @opener.expect("rex", "do", "project_open_opencode", "path=#{@root}", "directory=#{@directory}", "conversation=#{ID}", "--json",
+  def project(started:, block: BLOCK, root: @root)
+    @opener.expect("rex", "do", "project_open_opencode", "path=#{root}", "directory=#{@directory}", "conversation=#{ID}", "--json",
       response: { session_id: SESSION, window_id: WINDOW, block_id: block, started: started })
   end
 
@@ -115,7 +115,12 @@ class OpenCodeSessionLinkTest < Minitest::Test
   end
 
   def request
+    ready
     rpc("request", { sessionID: ID, blockID: BLOCK }, { requestID: UUID })
+  end
+
+  def ready
+    pending(false, request_id: nil, session_id: nil)
   end
 
   def focus(response: {})
@@ -140,24 +145,29 @@ class OpenCodeSessionLinkTest < Minitest::Test
     list(client(transport: "tcp"), client(uid: Process.uid + 1))
     list(client)
     project(started: true)
+    rpc("pending", { blockID: BLOCK }, SessionLinkError.new("HTTP 400: RPC not registered"))
+    rpc("pending", { blockID: BLOCK }, { acknowledged: false })
     request
     pending(false)
     pending(true)
     focus
 
     assert_output(/Opened #{ID}/) { @opener.run }
+    assert_equal 1, @opener.calls.count { |args, _| args[3]&.include?("/request?") }
   end
 
-  def test_warm_link_preserves_canonical_root_and_uses_the_sandbox_location_for_rpc
+  def test_warm_link_routes_external_sandbox_to_its_own_canonical_rex_root
     sandbox = File.join(@tmp, "worktree")
     @directory = File.join(sandbox, "nested")
     FileUtils.mkdir_p(@directory)
     @directory = File.realpath(@directory)
     symlink = File.join(@tmp, "repo link")
     File.symlink(@root, symlink)
-    metadata(canonical: symlink, sandboxes: ["/no/longer/there", sandbox])
+    sandbox_link = File.join(@tmp, "worktree link")
+    File.symlink(sandbox, sandbox_link)
+    metadata(canonical: symlink, sandboxes: ["/no/longer/there", sandbox_link])
     list(client("client:#{OTHER_UUID}", transport: "tcp"), client)
-    project(started: false)
+    project(started: false, root: File.realpath(sandbox))
     request
     pending(true)
     focus
@@ -171,7 +181,7 @@ class OpenCodeSessionLinkTest < Minitest::Test
       end
     end
     rpc_calls = @opener.calls.select { |args, _| args[0..2] == %w[opencode api post] }
-    assert_equal [@directory, @directory], rpc_calls.map { |_, options| options[:chdir] }
+    assert_equal [@directory, @directory, @directory], rpc_calls.map { |_, options| options[:chdir] }
   end
 
   def test_missing_session_stops_before_rex
@@ -210,12 +220,25 @@ class OpenCodeSessionLinkTest < Minitest::Test
     assert_match(/invalid OpenCode block target/, assert_raises(SessionLinkError) { @opener.run }.message)
   end
 
-  def test_missing_rpc_does_not_focus_or_try_another_tui
+  def test_rpc_preflight_timeout_preserves_last_error_without_sending_request
     metadata
     list(client)
     project(started: true)
-    rpc("request", { sessionID: ID, blockID: BLOCK }, SessionLinkError.new("RPC not found"))
-    assert_match(/delivery is uncertain.*RPC not found/, assert_raises(SessionLinkError) { @opener.run }.message)
+    rpc("pending", { blockID: BLOCK }, SessionLinkError.new("HTTP 400: RPC not registered"))
+    rpc("pending", { blockID: BLOCK }, -> {
+      @opener.advance(15)
+      raise SessionLinkError, "HTTP 400: plugin not loaded"
+    })
+    assert_match(/did not become ready.*plugin not loaded/, assert_raises(SessionLinkError) { @opener.run }.message)
+  end
+
+  def test_request_failure_is_not_retried_and_does_not_focus
+    metadata
+    list(client)
+    project(started: true)
+    ready
+    rpc("request", { sessionID: ID, blockID: BLOCK }, SessionLinkError.new("Lost connection"))
+    assert_match(/delivery is uncertain.*Lost connection/, assert_raises(SessionLinkError) { @opener.run }.message)
   end
 
   def test_missing_pending_entry_is_not_acknowledgement
